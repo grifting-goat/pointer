@@ -11,9 +11,11 @@
 #include "esp_event.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
+#include "driver/gpio.h"
 
 
 static const char *TAG = "POINTER";
+
 
 #include "host/ble_hs.h"
 #include "nimble/nimble_port.h"
@@ -22,8 +24,6 @@ static const char *TAG = "POINTER";
 #include "esp_hidd.h"
 #include "esp_hid_gap.h"
 
-
-
 #define CASE(a, b, c)  \
                 case a: \
 				buffer[0] = b;  \
@@ -31,6 +31,8 @@ static const char *TAG = "POINTER";
                 break;\
 
                 typedef struct
+
+#define PIN GPIO_NUM_4
                 
 {
     TaskHandle_t task_hdl;
@@ -38,6 +40,8 @@ static const char *TAG = "POINTER";
     uint8_t protocol_mode;
     uint8_t *buffer;
 } local_param_t;
+
+int level = 0;
 
 
 static local_param_t s_ble_hid_param = {0};
@@ -97,6 +101,7 @@ const unsigned char keyboardReportMap[] = { //7 bytes input (modifiers, resrvd, 
     // 65 bytes
 };
 
+#define KEYBOARD_INPUT_REPORT_LEN 7
 
 static void char_to_code(uint8_t *buffer, char ch)
 {
@@ -166,14 +171,62 @@ static void char_to_code(uint8_t *buffer, char ch)
 	}
 }
 
-
 void send_keystroke(char c) {
-    static uint8_t buffer[8] = {0};
+    if (s_ble_hid_param.hid_dev == NULL) {
+        ESP_LOGW(TAG, "HID device not initialized yet");
+        return;
+    }
+
+    static uint8_t buffer[KEYBOARD_INPUT_REPORT_LEN] = {0};
     char_to_code(buffer, c);
-    esp_hidd_dev_input_set(s_ble_hid_param.hid_dev, 0, 1, buffer, 8);
+    esp_hidd_dev_input_set(s_ble_hid_param.hid_dev, 0, 1, buffer, KEYBOARD_INPUT_REPORT_LEN);
     vTaskDelay(25 / portTICK_PERIOD_MS);
-    memset(buffer, 0, sizeof(uint8_t) * 8);
-    esp_hidd_dev_input_set(s_ble_hid_param.hid_dev, 0, 1, buffer, 8);
+    memset(buffer, 0, sizeof(buffer));
+    esp_hidd_dev_input_set(s_ble_hid_param.hid_dev, 0, 1, buffer, KEYBOARD_INPUT_REPORT_LEN);
+}
+
+const unsigned char mouseReportMap[] = {
+    0x05, 0x01,                    // USAGE_PAGE (Generic Desktop)
+    0x09, 0x02,                    // USAGE (Mouse)
+    0xa1, 0x01,                    // COLLECTION (Application)
+
+    0x09, 0x01,                    //   USAGE (Pointer)
+    0xa1, 0x00,                    //   COLLECTION (Physical)
+
+    0x05, 0x09,                    //     USAGE_PAGE (Button)
+    0x19, 0x01,                    //     USAGE_MINIMUM (Button 1)
+    0x29, 0x03,                    //     USAGE_MAXIMUM (Button 3)
+    0x15, 0x00,                    //     LOGICAL_MINIMUM (0)
+    0x25, 0x01,                    //     LOGICAL_MAXIMUM (1)
+    0x95, 0x03,                    //     REPORT_COUNT (3)
+    0x75, 0x01,                    //     REPORT_SIZE (1)
+    0x81, 0x02,                    //     INPUT (Data,Var,Abs)
+    0x95, 0x01,                    //     REPORT_COUNT (1)
+    0x75, 0x05,                    //     REPORT_SIZE (5)
+    0x81, 0x03,                    //     INPUT (Cnst,Var,Abs)
+
+    0x05, 0x01,                    //     USAGE_PAGE (Generic Desktop)
+    0x09, 0x30,                    //     USAGE (X)
+    0x09, 0x31,                    //     USAGE (Y)
+    0x09, 0x38,                    //     USAGE (Wheel)
+    0x15, 0x81,                    //     LOGICAL_MINIMUM (-127)
+    0x25, 0x7f,                    //     LOGICAL_MAXIMUM (127)
+    0x75, 0x08,                    //     REPORT_SIZE (8)
+    0x95, 0x03,                    //     REPORT_COUNT (3)
+    0x81, 0x06,                    //     INPUT (Data,Var,Rel)
+
+    0xc0,                          //   END_COLLECTION
+    0xc0                           // END_COLLECTION
+};
+
+void send_mouse(uint8_t buttons, char dx, char dy, char wheel)
+{
+    static uint8_t buffer[4] = {0};
+    buffer[0] = buttons;
+    buffer[1] = dx;
+    buffer[2] = dy;
+    buffer[3] = wheel;
+    esp_hidd_dev_input_set(s_ble_hid_param.hid_dev, 0, 0, buffer, 4);
 }
 
 void ble_hid_demo_task(void *pvParameters)
@@ -187,10 +240,9 @@ void ble_hid_demo_task(void *pvParameters)
     while (1) {
         c = fgetc(stdin);
 
-        if (c == 'w') {ESP_LOGI(TAG, "Gus is really cute");}
-
-        if(c != 255) {
-            //send_keystroke(c);
+        if (c == 'w') {
+            ESP_LOGI(TAG, "Sending key: w");
+            send_keystroke('w');
         }
         vTaskDelay(10 / portTICK_PERIOD_MS);
     }
@@ -514,8 +566,23 @@ void ble_hid_device_host_task(void *param)
 void ble_store_config_init(void);
 
 
+
+
+
 void app_main(void) {
     ESP_LOGI(TAG, "HELLO WORLD!");
+
+
+    gpio_config_t io_conf = {
+        .pin_bit_mask = (1ULL << PIN),   // which pin
+        .mode = GPIO_MODE_INPUT,          // input mode
+        .pull_up_en = GPIO_PULLUP_ENABLE, // enable pull-up
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,   // no interrupt (polling)
+    };
+    gpio_config(&io_conf);
+
+
     esp_err_t ret;
 
     esp_log_level_set("NimBLE", ESP_LOG_WARN);
@@ -549,4 +616,14 @@ void app_main(void) {
     if (ret) {
         ESP_LOGE(TAG, "esp_nimble_enable failed: %d", ret);
     }
+
+    while (1) {
+        level = gpio_get_level(PIN);
+
+        if (!level) {
+            send_keystroke('w');
+        }
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
 }
+

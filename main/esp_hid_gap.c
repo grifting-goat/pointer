@@ -878,6 +878,8 @@ nimble_hid_gap_event(struct ble_gap_event *event, void *arg)
          * convenience: just throw away the old bond and accept the new link.
          */
 
+        ESP_LOGW(TAG, "repeat pairing requested; deleting old bond and retrying");
+
         /* Delete the old bond. */
         rc = ble_gap_conn_find(event->repeat_pairing.conn_handle, &desc);
         assert(rc == 0);
@@ -891,7 +893,6 @@ nimble_hid_gap_event(struct ble_gap_event *event, void *arg)
     case BLE_GAP_EVENT_PASSKEY_ACTION:
         ESP_LOGI(TAG, "PASSKEY_ACTION_EVENT started");
         struct ble_sm_io pkey = {0};
-        int key = 0;
 
         if (event->passkey.params.action == BLE_SM_IOACT_DISP) {
             pkey.action = event->passkey.params.action;
@@ -900,9 +901,9 @@ nimble_hid_gap_event(struct ble_gap_event *event, void *arg)
             rc = ble_sm_inject_io(event->passkey.conn_handle, &pkey);
             ESP_LOGI(TAG, "ble_sm_inject_io result: %d", rc);
         } else if (event->passkey.params.action == BLE_SM_IOACT_NUMCMP) {
-            ESP_LOGI(TAG, "Accepting passkey..");
+            ESP_LOGI(TAG, "Accepting numeric comparison");
             pkey.action = event->passkey.params.action;
-            pkey.numcmp_accept = key;
+            pkey.numcmp_accept = 1;
             rc = ble_sm_inject_io(event->passkey.conn_handle, &pkey);
             ESP_LOGI(TAG, "ble_sm_inject_io result: %d", rc);
         } else if (event->passkey.params.action == BLE_SM_IOACT_OOB) {
