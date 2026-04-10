@@ -13,12 +13,10 @@
 
 #include "esp_hid_driver.h"
 
-
-
 int level = 0;
 
 void app_main(void) {
-	bt_main();
+	bt_hid_main();
 
 	gpio_config_t io_conf = {
         .pin_bit_mask = (1ULL << PIN),   // which pin

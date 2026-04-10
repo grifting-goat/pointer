@@ -562,8 +562,7 @@ void ble_store_config_init(void);
 
 
 
-void bt_main() {
-
+void bt_hid_main() {
 
     esp_err_t ret;
 

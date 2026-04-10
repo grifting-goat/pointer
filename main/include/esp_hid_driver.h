@@ -14,7 +14,7 @@ extern "C" {
 #define KEYBOARD_INPUT_REPORT_LEN 7
 
 /* API */
-void bt_main(void);
+void bt_hid_main(void);
 void send_keystroke(char c);
 void send_mouse(uint8_t buttons, char dx, char dy, char wheel);
 
