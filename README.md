@@ -1,3 +1,3 @@
-## DR SOESS HAND
+## DR SUESS HAND
 
 embedded systems project
