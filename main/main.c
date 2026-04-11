@@ -13,7 +13,8 @@
 
 #include "esp_hid_driver.h"
 
-int level = 0;
+uint8_t level = 0;
+uint8_t pressing = 0;	
 
 void app_main(void) {
 	bt_hid_main();
@@ -30,9 +31,16 @@ void app_main(void) {
 	 while (1) {
         level = gpio_get_level(PIN);
 
-        if (!level) {
-            send_keystroke('w');
+        if (!level && !pressing) {
+            send_keystroke_press('w');
+			pressing = 1;
+
         }
-        vTaskDelay(pdMS_TO_TICKS(50));
+		else if (level && pressing) {
+			send_keystroke_release('w');
+			pressing = 0;
+		}
+
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
