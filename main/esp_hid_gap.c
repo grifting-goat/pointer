@@ -26,7 +26,7 @@
 #include "esp_bt_device.h"
 #endif
 
-static const char *TAG = "ESP_HID_GAP";
+static const char *TAG_BT = "ESP_HID_GAP";
 
 // uncomment to print all devices that were seen during a scan
 #define GAP_DBG_PRINTF(...) //printf(__VA_ARGS__)
@@ -813,28 +813,28 @@ nimble_hid_gap_event(struct ble_gap_event *event, void *arg)
     switch (event->type) {
     case BLE_GAP_EVENT_CONNECT:
         /* A new connection was established or a connection attempt failed. */
-        ESP_LOGI(TAG, "connection %s; status=%d",
+        ESP_LOGI(TAG_BT, "connection %s; status=%d",
                 event->connect.status == 0 ? "established" : "failed",
                 event->connect.status);
         return 0;
         break;
     case BLE_GAP_EVENT_DISCONNECT:
-        ESP_LOGI(TAG, "disconnect; reason=%d", event->disconnect.reason);
+        ESP_LOGI(TAG_BT, "disconnect; reason=%d", event->disconnect.reason);
 
         return 0;
     case BLE_GAP_EVENT_CONN_UPDATE:
         /* The central has updated the connection parameters. */
-        ESP_LOGI(TAG, "connection updated; status=%d",
+        ESP_LOGI(TAG_BT, "connection updated; status=%d",
                 event->conn_update.status);
         return 0;
 
     case BLE_GAP_EVENT_ADV_COMPLETE:
-        ESP_LOGI(TAG, "advertise complete; reason=%d",
+        ESP_LOGI(TAG_BT, "advertise complete; reason=%d",
                 event->adv_complete.reason);
         return 0;
 
     case BLE_GAP_EVENT_SUBSCRIBE:
-        ESP_LOGI(TAG, "subscribe event; conn_handle=%d attr_handle=%d "
+        ESP_LOGI(TAG_BT, "subscribe event; conn_handle=%d attr_handle=%d "
                 "reason=%d prevn=%d curn=%d previ=%d curi=%d\n",
                 event->subscribe.conn_handle,
                 event->subscribe.attr_handle,
@@ -846,7 +846,7 @@ nimble_hid_gap_event(struct ble_gap_event *event, void *arg)
         return 0;
 
     case BLE_GAP_EVENT_MTU:
-        ESP_LOGI(TAG, "mtu update event; conn_handle=%d cid=%d mtu=%d",
+        ESP_LOGI(TAG_BT, "mtu update event; conn_handle=%d cid=%d mtu=%d",
                 event->mtu.conn_handle,
                 event->mtu.channel_id,
                 event->mtu.value);
@@ -878,7 +878,7 @@ nimble_hid_gap_event(struct ble_gap_event *event, void *arg)
          * convenience: just throw away the old bond and accept the new link.
          */
 
-        ESP_LOGW(TAG, "repeat pairing requested; deleting old bond and retrying");
+        ESP_LOGW(TAG_BT, "repeat pairing requested; deleting old bond and retrying");
 
         /* Delete the old bond. */
         rc = ble_gap_conn_find(event->repeat_pairing.conn_handle, &desc);
@@ -891,21 +891,21 @@ nimble_hid_gap_event(struct ble_gap_event *event, void *arg)
         return BLE_GAP_REPEAT_PAIRING_RETRY;
 
     case BLE_GAP_EVENT_PASSKEY_ACTION:
-        ESP_LOGI(TAG, "PASSKEY_ACTION_EVENT started");
+        ESP_LOGI(TAG_BT, "PASSKEY_ACTION_EVENT started");
         struct ble_sm_io pkey = {0};
 
         if (event->passkey.params.action == BLE_SM_IOACT_DISP) {
             pkey.action = event->passkey.params.action;
             pkey.passkey = 123456; // This is the passkey to be entered on peer
-            ESP_LOGI(TAG, "Enter passkey %" PRIu32 "on the peer side", pkey.passkey);
+            ESP_LOGI(TAG_BT, "Enter passkey %" PRIu32 "on the peer side", pkey.passkey);
             rc = ble_sm_inject_io(event->passkey.conn_handle, &pkey);
-            ESP_LOGI(TAG, "ble_sm_inject_io result: %d", rc);
+            ESP_LOGI(TAG_BT, "ble_sm_inject_io result: %d", rc);
         } else if (event->passkey.params.action == BLE_SM_IOACT_NUMCMP) {
-            ESP_LOGI(TAG, "Accepting numeric comparison");
+            ESP_LOGI(TAG_BT, "Accepting numeric comparison");
             pkey.action = event->passkey.params.action;
             pkey.numcmp_accept = 1;
             rc = ble_sm_inject_io(event->passkey.conn_handle, &pkey);
-            ESP_LOGI(TAG, "ble_sm_inject_io result: %d", rc);
+            ESP_LOGI(TAG_BT, "ble_sm_inject_io result: %d", rc);
         } else if (event->passkey.params.action == BLE_SM_IOACT_OOB) {
             static uint8_t tem_oob[16] = {0};
             pkey.action = event->passkey.params.action;
@@ -913,13 +913,13 @@ nimble_hid_gap_event(struct ble_gap_event *event, void *arg)
                 pkey.oob[i] = tem_oob[i];
             }
             rc = ble_sm_inject_io(event->passkey.conn_handle, &pkey);
-            ESP_LOGI(TAG, "ble_sm_inject_io result: %d", rc);
+            ESP_LOGI(TAG_BT, "ble_sm_inject_io result: %d", rc);
         } else if (event->passkey.params.action == BLE_SM_IOACT_INPUT) {
-            ESP_LOGI(TAG, "Input not supported passing -> 123456");
+            ESP_LOGI(TAG_BT, "Input not supported passing -> 123456");
             pkey.action = event->passkey.params.action;
             pkey.passkey = 123456;
             rc = ble_sm_inject_io(event->passkey.conn_handle, &pkey);
-            ESP_LOGI(TAG, "ble_sm_inject_io result: %d", rc);
+            ESP_LOGI(TAG_BT, "ble_sm_inject_io result: %d", rc);
         }
         return 0;
     }
@@ -1074,24 +1074,24 @@ static esp_err_t init_low_level(uint8_t mode)
 #endif
     ret = esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT);
     if (ret) {
-        ESP_LOGE(TAG, "esp_bt_controller_mem_release failed: %d", ret);
+        ESP_LOGE(TAG_BT, "esp_bt_controller_mem_release failed: %d", ret);
         return ret;
     }
     ret = esp_bt_controller_init(&bt_cfg);
     if (ret) {
-        ESP_LOGE(TAG, "esp_bt_controller_init failed: %d", ret);
+        ESP_LOGE(TAG_BT, "esp_bt_controller_init failed: %d", ret);
         return ret;
     }
 
     ret = esp_bt_controller_enable(mode);
     if (ret) {
-        ESP_LOGE(TAG, "esp_bt_controller_enable failed: %d", ret);
+        ESP_LOGE(TAG_BT, "esp_bt_controller_enable failed: %d", ret);
         return ret;
     }
 
     ret = esp_nimble_init();
     if (ret) {
-        ESP_LOGE(TAG, "esp_nimble_init failed: %d", ret);
+        ESP_LOGE(TAG_BT, "esp_nimble_init failed: %d", ret);
         return ret;
     }
 
@@ -1105,17 +1105,17 @@ static esp_err_t deinit_low_level(void)
 
     ret = esp_nimble_deinit();
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "esp_nimble_deinit failed: %d", ret);
+        ESP_LOGE(TAG_BT, "esp_nimble_deinit failed: %d", ret);
     }
 
     ret = esp_bt_controller_disable();
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "esp_bt_controller_disable failed: %d", ret);
+        ESP_LOGE(TAG_BT, "esp_bt_controller_disable failed: %d", ret);
     }
 
     ret = esp_bt_controller_deinit();
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "esp_bt_controller_deinit failed: %d", ret);
+        ESP_LOGE(TAG_BT, "esp_bt_controller_deinit failed: %d", ret);
     }
 
     return ret;
@@ -1128,7 +1128,7 @@ esp_err_t esp_hid_gap_deinit(void)
 
     ret = deinit_low_level();
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "deinit_low_level failed: %d", ret);
+        ESP_LOGE(TAG_BT, "deinit_low_level failed: %d", ret);
     }
 
     if (bt_hidh_cb_semaphore != NULL) {
@@ -1148,24 +1148,24 @@ esp_err_t esp_hid_gap_init(uint8_t mode)
 {
     esp_err_t ret;
     if (!mode || mode > ESP_BT_MODE_BTDM) {
-        ESP_LOGE(TAG, "Invalid mode given!");
+        ESP_LOGE(TAG_BT, "Invalid mode given!");
         return ESP_FAIL;
     }
 
     if (bt_hidh_cb_semaphore != NULL) {
-        ESP_LOGE(TAG, "Already initialised");
+        ESP_LOGE(TAG_BT, "Already initialised");
         return ESP_FAIL;
     }
 
     bt_hidh_cb_semaphore = xSemaphoreCreateBinary();
     if (bt_hidh_cb_semaphore == NULL) {
-        ESP_LOGE(TAG, "xSemaphoreCreateMutex failed!");
+        ESP_LOGE(TAG_BT, "xSemaphoreCreateMutex failed!");
         return ESP_FAIL;
     }
 
     ble_hidh_cb_semaphore = xSemaphoreCreateBinary();
     if (ble_hidh_cb_semaphore == NULL) {
-        ESP_LOGE(TAG, "xSemaphoreCreateMutex failed!");
+        ESP_LOGE(TAG_BT, "xSemaphoreCreateMutex failed!");
         vSemaphoreDelete(bt_hidh_cb_semaphore);
         bt_hidh_cb_semaphore = NULL;
         return ESP_FAIL;
