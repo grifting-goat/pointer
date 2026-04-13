@@ -10,6 +10,8 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "driver/i2c_master.h"
 
 
@@ -33,11 +35,18 @@
 #define BMI160_ACC_RANGE_2G 0x03
 #define BMI160_SOFT_RESET_CMD 0xB6
 
+#define I2C_DEMO_TASK_STACK_SIZE 4096
+#define I2C_DEMO_TASK_PRIORITY 5
+
+/**
+ * @brief FreeRTOS task that initializes the BMI160 and logs peak acceleration.
+ */
+void i2c_demo_task(void *pvParameters);
 
 /**
  * @brief Main I2C function for ESP32
  */
-void esp_i2c_main(void);
+void i2c_main(void);
 
 
 #endif // ESP_I2C_DRIVER_H

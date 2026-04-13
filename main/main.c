@@ -21,7 +21,7 @@ uint8_t pressing = 0;
 void app_main(void) {
 	bt_hid_main();
 
-    esp_i2c_main();
+    i2c_main();
 
 	gpio_config_t io_conf = {
         .pin_bit_mask = (1ULL << PIN),   // which pin
