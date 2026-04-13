@@ -15,6 +15,10 @@ extern "C" {
 
 /* API */
 void bt_hid_main(void);
+
+void send_keystroke_press(char c);
+void send_keystroke_release(char c);
+
 void send_keystroke(char c);
 void send_mouse(uint8_t buttons, char dx, char dy, char wheel);
 

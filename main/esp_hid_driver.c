@@ -31,8 +31,7 @@ static const char *TAG_BT = "POINTER_BT";
 				buffer[2] = c; \
                 break;\
 
-                typedef struct
-
+typedef struct
 {
     TaskHandle_t task_hdl;
     esp_hidd_dev_t *hid_dev;
@@ -42,6 +41,8 @@ static const char *TAG_BT = "POINTER_BT";
 
 
 static local_param_t s_ble_hid_param = {0};
+
+uint8_t temp_toggle = 0;
 
 
 #define USB_HID_MODIFIER_LEFT_CTRL      0x01
@@ -156,7 +157,7 @@ static void char_to_code(uint8_t *buffer, char ch)
 			CASE('-', 0, 0x2D);
 			CASE('_', USB_HID_MODIFIER_LEFT_SHIFT, 0x2D);
 			CASE('=', 0, 0x2E);
-			CASE('+', USB_HID_MODIFIER_LEFT_SHIFT, 39);
+			CASE('+', USB_HID_MODIFIER_LEFT_SHIFT, 0x2E);
 			CASE(8, 0, 0x2A); // backspace
 			CASE('\t', 0, 0x2B);
 			default:
@@ -166,17 +167,92 @@ static void char_to_code(uint8_t *buffer, char ch)
 	}
 }
 
+static uint8_t char_to_keycode(char ch)
+{
+    if(ch >= 'a' && ch <= 'z')
+        return (uint8_t)(4 + (ch - 'a'));
+
+    if(ch >= 'A' && ch <= 'Z')
+        return (uint8_t)(4 + (ch - 'A'));
+
+    if(ch >= '1' && ch <= '9')
+        return (uint8_t)(30 + (ch - '1'));
+
+    if(ch == '0') return 39;
+
+    switch(ch)
+    {
+        case ' ':   return USB_HID_SPACE;
+        case '.':   return USB_HID_DOT;
+        case '\n':  return USB_HID_NEWLINE;
+        case '?':
+        case '/':   return USB_HID_FSLASH;
+        case '|':
+        case '\\':  return USB_HID_BSLASH;
+        case '<':
+        case '>':
+        case ',':   return USB_HID_COMMA;
+        case '@':   return 31;
+        case '!':   return 30;
+        case '#':   return 32;
+        case '$':   return 33;
+        case '%':   return 34;
+        case '^':   return 35;
+        case '&':   return 36;
+        case '*':   return 37;
+        case '(':   return 38;
+        case ')':   return 39;
+        case '-':
+        case '_':   return 0x2D;
+        case '=':
+        case '+':   return 0x2E;
+        case 8:     return 0x2A; // backspace
+        case '\t':  return 0x2B;
+        default:    return 0;
+    }
+}
+
+static uint8_t buffer[KEYBOARD_INPUT_REPORT_LEN] = {0};
+
 void send_keystroke(char c) {
     if (s_ble_hid_param.hid_dev == NULL) {
         ESP_LOGW(TAG_BT, "HID device not initialized yet");
         return;
     }
 
-    static uint8_t buffer[KEYBOARD_INPUT_REPORT_LEN] = {0};
     char_to_code(buffer, c);
     esp_hidd_dev_input_set(s_ble_hid_param.hid_dev, 0, 1, buffer, KEYBOARD_INPUT_REPORT_LEN);
     vTaskDelay(25 / portTICK_PERIOD_MS);
     memset(buffer, 0, sizeof(buffer));
+    esp_hidd_dev_input_set(s_ble_hid_param.hid_dev, 0, 1, buffer, KEYBOARD_INPUT_REPORT_LEN);
+}
+
+
+void send_keystroke_press(char c) {
+
+    if (temp_toggle) {buffer[0] |= USB_HID_MODIFIER_LEFT_SHIFT;}
+
+    for (int i = 2; i < KEYBOARD_INPUT_REPORT_LEN; i++) {
+        if (buffer[i] == 0) {
+            buffer[i] = char_to_keycode(c);
+            break;
+        }
+    }
+
+    esp_hidd_dev_input_set(s_ble_hid_param.hid_dev, 0, 1, buffer, KEYBOARD_INPUT_REPORT_LEN);
+
+}
+
+
+void send_keystroke_release(char c) {
+    if (temp_toggle) {buffer[0] &= ~USB_HID_MODIFIER_LEFT_SHIFT;}
+
+    for (int i = 2; i < KEYBOARD_INPUT_REPORT_LEN; i++) {
+        if (buffer[i] == char_to_keycode(c)) {
+            buffer[i] = 0;
+            break;
+        }
+    }
     esp_hidd_dev_input_set(s_ble_hid_param.hid_dev, 0, 1, buffer, KEYBOARD_INPUT_REPORT_LEN);
 }
 
@@ -239,6 +315,13 @@ void ble_hid_demo_task(void *pvParameters)
             ESP_LOGI(TAG_BT, "Sending key: w");
             send_keystroke('w');
         }
+
+        if (c == 'q') {
+            temp_toggle = (~temp_toggle) & 1;
+            ESP_LOGI(TAG_BT, "TOGGLE: %d", temp_toggle);
+            
+        }
+
         vTaskDelay(10 / portTICK_PERIOD_MS);
     }
 }
