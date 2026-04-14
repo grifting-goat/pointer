@@ -10,7 +10,6 @@ extern "C" {
 #endif
 
 /* configuration */
-#define PIN GPIO_NUM_4
 #define KEYBOARD_INPUT_REPORT_LEN 7
 
 /* API */

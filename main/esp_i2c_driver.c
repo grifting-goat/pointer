@@ -233,10 +233,36 @@ void i2c_main()
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Failed to set accel config: %s", esp_err_to_name(err));
     }
-    err = bmi160_register_write_byte(shared.dev, BMI160_ACC_RANGE_REG_ADDR, BMI160_ACC_RANGE_2G);
+
+    err = bmi160_register_write_byte(shared.dev, BMI160_ACC_RANGE_REG_ADDR, BMI160_ACC_RANGE_4G);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Failed to set accel range: %s", esp_err_to_name(err));
     }
+
+    err = bmi160_register_write_byte(shared.dev, BMI160_REG_INT_MOTION_1, BMI160_INT_INT_ANYM_TH);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to set interrupt 0 map: %s", esp_err_to_name(err));
+    }
+
+
+    err = bmi160_register_write_byte(shared.dev, BMI160_REG_INT_EN_0, BMI160_INT_EN_0);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to set interrupt 0 mode: %s", esp_err_to_name(err));
+    }
+
+
+    err = bmi160_register_write_byte(shared.dev, BMI160_REG_INT_OUT_CTRL, BMI160_INT_OUTPUT_HIGH);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to set interrupt 0 pin: %s", esp_err_to_name(err));
+    }
+
+
+    err = bmi160_register_write_byte(shared.dev, BMI160_REG_INT_MAP_0, BMI160_INT_MOTION_ANY);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to set interrupt 0 map: %s", esp_err_to_name(err));
+    }
+
+
 
 
     BaseType_t task_created = xTaskCreate(
