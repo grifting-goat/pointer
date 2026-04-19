@@ -1,7 +1,7 @@
 /*
- * SPDX-FileCopyrightText: 2024 Espressif Systems (Shanghai) CO LTD
  *
- * SPDX-License-Identifier: Unlicense OR CC0-1.0
+ *
+ * 
  */
 /* i2c - Simple Example
 
@@ -22,7 +22,10 @@
 #include "include/esp_i2c_driver.h"
 
 
-static const char *TAG = "example";
+CIRC_BUF_DEF(circular_buffer, BUFFER_SIZE);
+
+
+static const char *TAG = "example"; 
 
 typedef struct {
     i2c_master_bus_handle_t  bus;
@@ -30,9 +33,11 @@ typedef struct {
     SemaphoreHandle_t        mutex;
 } i2c_shared_t;
 
-
 i2c_shared_t shared;
 
+void i2c_get_buffer(Circ_buf* copy) {
+    circ_buf_copy(&circular_buffer, copy);
+}
 
 /**
  * @brief Read a sequence of bytes from a BMI160 sensor registers
@@ -94,6 +99,18 @@ esp_err_t esp_i2c_get_accel(int16_t* acc_buffer) {
 
 }
 
+esp_err_t esp_i2c_get_full(int16_t* acc_buffer) {
+    uint8_t buffer[SAMPLES_PER_CYCLE << 1] = {0};
+    esp_err_t err = bmi160_register_read(shared.dev, BMI160_GYRO_DATA_ADDR, buffer, SAMPLES_PER_CYCLE << 1);
+    if (err != ESP_OK) {return err;}
+    for (int i = 0; i < SAMPLES_PER_CYCLE; i++) {
+        acc_buffer[i] = (int16_t)((buffer[(i * 2) + 1] << 8) | buffer[i * 2]);
+    }
+
+    return ESP_OK;
+
+}
+
 
 static void shared_init() {
 
@@ -104,6 +121,54 @@ static void shared_init() {
     i2c_master_dev_handle_t dev_handle;
 
     i2c_master_init(&bus_handle, &dev_handle);
+
+}
+
+void recording_task(void *pvParameters) {
+    (void)pvParameters;
+
+}
+
+void data_buffer_task(void *pvParameters) {
+
+    (void)pvParameters;
+    int16_t raw_data[SAMPLES_PER_CYCLE] = {0};
+
+    TickType_t sample_time = pdMS_TO_TICKS(RECORDING_MS);
+    TickType_t print_time = pdMS_TO_TICKS(1000);
+
+    TickType_t print_mark = xTaskGetTickCount();
+
+    while (esp_i2c_get_full(raw_data) == ESP_OK) {
+        TickType_t now = xTaskGetTickCount();
+
+        for (int i = 0; i < SAMPLES_PER_CYCLE; i++) {
+            circ_buf_push(&circular_buffer, raw_data[i]);
+        }
+
+        if ((now - print_mark) > print_time) {
+
+            int32_t ax_mg = ((int32_t)raw_data[3] * 1000) / 8192; //change these if you ever change acc_range 
+            int32_t ay_mg = ((int32_t)raw_data[4] * 1000) / 8192;
+            int32_t az_mg = ((int32_t)raw_data[5] * 1000) / 8192;
+            int32_t gx_raw = (int32_t)raw_data[0];
+            int32_t gy_raw = (int32_t)raw_data[1];
+            int32_t gz_raw = (int32_t)raw_data[2];
+
+            print_mark += print_time;
+
+            /*ESP_LOGI(TAG,
+                     "Accel (mg) X:%ld Y:%ld Z:%ld | Gyro (raw) X:%ld Y:%ld Z:%ld",
+                     (long)ax_mg,
+                     (long)ay_mg,
+                     (long)az_mg,
+                     (long)gx_raw,
+                     (long)gy_raw,
+                     (long)gz_raw);*/
+        }
+        
+        vTaskDelay(sample_time);
+    }
 
 }
 
@@ -142,9 +207,9 @@ void i2c_demo_task(void *pvParameters)
 
         if ((now - print_mark) > print_time) {
 
-            int32_t ax_mg = ((int32_t)max_acceleration[0] * 1000) / 16384;
-            int32_t ay_mg = ((int32_t)max_acceleration[1] * 1000) / 16384;
-            int32_t az_mg = ((int32_t)max_acceleration[2] * 1000) / 16384;
+            int32_t ax_mg = ((int32_t)max_acceleration[0] * 1000) / 8192; //change these if you ever change acc_range 
+            int32_t ay_mg = ((int32_t)max_acceleration[1] * 1000) / 8192;
+            int32_t az_mg = ((int32_t)max_acceleration[2] * 1000) / 8192;
 
             max_acceleration_mag = 0;
 
@@ -227,11 +292,22 @@ void i2c_main()
         return;
     }
 
-    vTaskDelay(pdMS_TO_TICKS(5));
+    err = bmi160_register_write_byte(shared.dev, BMI160_CMD_REG_ADDR, BMI160_GYRO_NORMAL_MODE_CMD);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to set gyro normal mode: %s", esp_err_to_name(err));
+    }
+
+    // Gyro startup to normal mode is significantly slower than accel startup.
+    vTaskDelay(pdMS_TO_TICKS(100));
 
     err = bmi160_register_write_byte(shared.dev, BMI160_ACC_CONF_REG_ADDR, BMI160_ACC_CONF_100HZ_NORMAL);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Failed to set accel config: %s", esp_err_to_name(err));
+    }
+
+    err = bmi160_register_write_byte(shared.dev, BMI160_GYRO_CONF_REG_ADDR, BMI160_GYRO_CONF_100HZ_NORMAL);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to set gyro config: %s", esp_err_to_name(err));
     }
 
     err = bmi160_register_write_byte(shared.dev, BMI160_ACC_RANGE_REG_ADDR, BMI160_ACC_RANGE_4G);
@@ -239,9 +315,14 @@ void i2c_main()
         ESP_LOGW(TAG, "Failed to set accel range: %s", esp_err_to_name(err));
     }
 
-    err = bmi160_register_write_byte(shared.dev, BMI160_REG_INT_MOTION_1, BMI160_INT_INT_ANYM_TH);
+    err = bmi160_register_write_byte(shared.dev, BMI160_GYRO_RANGE_REG_ADDR, BMI160_GYRO_RANGE_2000_DPS);
     if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to set interrupt 0 map: %s", esp_err_to_name(err));
+        ESP_LOGW(TAG, "Failed to set gyro range: %s", esp_err_to_name(err));
+    }
+
+    err = bmi160_register_write_byte(shared.dev, BMI160_REG_INT_MOTION_1, BMI160_INT_ANYM_TH);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to set interrupt motion threshold: %s", esp_err_to_name(err));
     }
 
 
@@ -264,9 +345,8 @@ void i2c_main()
 
 
 
-
     BaseType_t task_created = xTaskCreate(
-        i2c_demo_task,
+        data_buffer_task,
         "i2c_demo_task",
         I2C_DEMO_TASK_STACK_SIZE,
         NULL,

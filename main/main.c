@@ -9,21 +9,22 @@
 #include "freertos/queue.h"
 #include "esp_system.h"
 #include "esp_log.h"
-
 #include "driver/gpio.h"
-
 #include "esp_hid_driver.h"
-
 #include "esp_i2c_driver.h"
+#include "circ_buf.h"
 
 #define PIN_GPIO GPIO_NUM_4
 
 #define PIN_INT_0 GPIO_NUM_19
 
-static const char *TAG_MAIN = "Main";
+//static const char *TAG_MAIN = "Main";
 
 uint8_t level = 0;
-uint8_t pressing = 0;	
+uint8_t pressing = 0;
+
+TickType_t cooldown_time = pdMS_TO_TICKS(RECORDING_TIME);
+TickType_t cooldown_check = pdMS_TO_TICKS(RECORDING_MS);
 
 static QueueHandle_t gpio_evt_queue = NULL;
 
@@ -36,7 +37,14 @@ static void bmi160_interrupt_task(void *arg) {
     uint32_t io_num;
     while (1) {
         if (xQueueReceive(gpio_evt_queue, &io_num, portMAX_DELAY)) {
-            ESP_LOGI(TAG_MAIN, "BMI160 interrupt on GPIO %lu\n", io_num);
+            TickType_t now = xTaskGetTickCount();
+            if (now - cooldown_check > cooldown_time) {
+                //ESP_LOGI(TAG_MAIN, "BMI160 interrupt on GPIO %lu\n", io_num);
+                CIRC_BUF_DEF(buf, BUFFER_SIZE);
+                i2c_get_buffer(&buf);
+                for (int i = 0; i < buf.maxlen; i++) {printf("%d ", buf.buffer[i]);}
+                printf("\n");
+            }
         }
     }
 }
