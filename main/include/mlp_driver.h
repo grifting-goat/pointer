@@ -7,7 +7,7 @@
 #include "circ_buf.h"
 #include "model_int8.h"
 
-#define MLP_INPUT_SIZE 300
+#define MLP_INPUT_SIZE 648
 #define MLP_HIDDEN0_SIZE 128
 #define MLP_HIDDEN1_SIZE 64
 #define MLP_OUTPUT_SIZE 2
