@@ -303,8 +303,8 @@ void send_mouse(uint8_t buttons, char dx, char dy, char wheel)
 void ble_hid_demo_task(void *pvParameters)
 {
     static const char* help_string = "########################################################################\n"\
-                                      "demo task startup:\n"\
-                                      "########################################################################\n";
+                                     "demo task startup:\n"\
+                                     "########################################################################\n";
     printf("%s\n", help_string);
     char c;
 
