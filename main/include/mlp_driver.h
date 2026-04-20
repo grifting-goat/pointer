@@ -41,4 +41,4 @@ void mlp_predict_raw(const int16_t *raw_window, size_t raw_len, mlp_result_t *ou
  */
 void mlp_predict_buffer(const Circ_buf *buf, mlp_result_t *out);
 
-#endif /* MLP_DRIVER_H */
+#endif /* MLP_DRIVER_H */ 

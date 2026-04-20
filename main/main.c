@@ -17,7 +17,7 @@
 
 
 //#define TRAINING
-#define INFERENCE
+//#define INFERENCE  
 
 #define PIN_GPIO GPIO_NUM_4
 #define PIN_INT_0 GPIO_NUM_19
@@ -33,7 +33,7 @@ static const char *TAG_MAIN = "Main";
 uint8_t level = 0;
 uint8_t pressing = 0;
 
-static const float CIRCLE_CONF_THRESHOLD = 0.5f;
+static const float CIRCLE_CONF_THRESHOLD = 0.75f;
 static const float CIRCLE_MOTION_THRESHOLD = 90.0f;
 
 TickType_t cooldown_time = pdMS_TO_TICKS(RECORDING_TIME);
@@ -52,11 +52,29 @@ static void bmi160_interrupt_task(void *arg) {
         if (xQueueReceive(gpio_evt_queue, &io_num, portMAX_DELAY)) {
             TickType_t now = xTaskGetTickCount();
             if (now - cooldown_check > cooldown_time) {
+                cooldown_check += cooldown_time;
                 //ESP_LOGI(TAG_MAIN, "BMI160 interrupt on GPIO %lu\n", io_num);
+                vTaskDelay(pdMS_TO_TICKS(800));
+
                 CIRC_BUF_DEF(buf, BUFFER_SIZE);
-                i2c_get_buffer(&buf);
-                for (int i = 0; i < buf.maxlen; i++) {printf("%d ", buf.buffer[i]);}
-                printf("\n");
+                i2c_get_buffer_ordered(&buf);
+                
+                mlp_result_t result;
+                mlp_predict_buffer(&buf, &result);
+                const int circle_detected =
+                    (result.class_id == 1) &&
+                    (result.confidence >= CIRCLE_CONF_THRESHOLD) &&
+                    (result.motion_score >= CIRCLE_MOTION_THRESHOLD);
+
+                printf("prediction=%d confidence=%.3f motion=%.1f trigger=%d\n",
+                    result.class_id,
+                    result.confidence,
+                    result.motion_score,
+                    circle_detected);
+
+                if (circle_detected) {
+                    send_keystroke(' ');
+                }
             }
         }
     }
@@ -96,7 +114,7 @@ void setup_gpio_interrupt() {
     gpio_install_isr_service(0);
     gpio_isr_handler_add(PIN_INT_0, bmi160_isr_handler, (void *)PIN_INT_0);
 
-    xTaskCreate(bmi160_interrupt_task, "bmi160_task", 2048, NULL, 10, NULL);
+    xTaskCreate(bmi160_interrupt_task, "bmi160_task", DEMO_TASK_STACK_SIZE, NULL, DEMO_TASK_PRIORITY, NULL);
 }
 
 
@@ -112,11 +130,6 @@ static void demo_inference_task(void *arg) {
 		else if (level && pressing) {
             CIRC_BUF_DEF(buf, BUFFER_SIZE);
             i2c_get_buffer_ordered(&buf);
-
-            /*
-            for (int i = 0; i < BUFFER_SIZE; i++) {printf("%d ", buf.buffer[i]);}
-            printf("\n");
-            */
             
             mlp_result_t result;
             mlp_predict_buffer(&buf, &result);
@@ -171,7 +184,7 @@ void app_main(void) {
 
     i2c_main();
 
-    //setup_gpio_interrupt(); 
+    setup_gpio_interrupt(); 
 
 	gpio_config_t io_conf = {
         .pin_bit_mask = (1ULL << PIN_GPIO),   // which pin
@@ -208,7 +221,7 @@ void app_main(void) {
     );
 
 	if (training_task != pdPASS) {
-		ESP_LOGE(TAG_MAIN, "Failed to create demo_inference_task");
+		ESP_LOGE(TAG_MAIN, "Failed to create training_data_task");
 	}
 #endif
 
