@@ -35,10 +35,10 @@ static float compute_motion_score(const int16_t *raw_window, size_t len) {
 }
 
 void mlp_predict_raw(const int16_t *raw_window, size_t raw_len, mlp_result_t *out) {
-	float x[MLP_INPUT_SIZE] = {0.0f};
-	float h0[MLP_HIDDEN0_SIZE] = {0.0f};
-	float h1[MLP_HIDDEN1_SIZE] = {0.0f};
-	float logits[MLP_OUTPUT_SIZE] = {0.0f};
+	static float x[MLP_INPUT_SIZE];
+	static float h0[MLP_HIDDEN0_SIZE];
+	static float h1[MLP_HIDDEN1_SIZE];
+	static float logits[MLP_OUTPUT_SIZE];
 
 	if (out == NULL) {
 		return;
@@ -53,6 +53,10 @@ void mlp_predict_raw(const int16_t *raw_window, size_t raw_len, mlp_result_t *ou
 	}
 
 	out->motion_score = compute_motion_score(raw_window, raw_len);
+
+	for (int i = 0; i < MLP_INPUT_SIZE; i++) {
+		x[i] = 0.0f;
+	}
 
 	for (int i = 0; i < MLP_INPUT_SIZE; i++) {
 		if ((size_t)i < raw_len) {
@@ -118,16 +122,10 @@ void mlp_predict_buffer(const Circ_buf *buf, mlp_result_t *out) {
 		return;
 	}
 
-	int16_t ordered[MLP_INPUT_SIZE] = {0};
 	int len = buf->maxlen;
 	if (len > MLP_INPUT_SIZE) {
 		len = MLP_INPUT_SIZE;
 	}
 
-	for (int i = 0; i < len; i++) {
-		const int src_idx = (buf->head + i) % buf->maxlen;
-		ordered[i] = buf->buffer[src_idx];
-	}
-
-	mlp_predict_raw(ordered, (size_t)len, out);
+	mlp_predict_raw(buf->buffer, (size_t)len, out);
 }

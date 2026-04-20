@@ -15,17 +15,26 @@
 #include "circ_buf.h"
 #include "mlp_driver.h"
 
-#define PIN_GPIO GPIO_NUM_4
 
+//#define TRAINING
+#define INFERENCE
+
+#define PIN_GPIO GPIO_NUM_4
 #define PIN_INT_0 GPIO_NUM_19
 
-//static const char *TAG_MAIN = "Main";
+#define DEMO_TASK_STACK_SIZE 8192
+#define DEMO_TASK_PRIORITY 5
+
+#define TRAINING_TASK_STACK_SIZE 4092
+#define TRAINING_TASK_PRIORITY 5
+
+static const char *TAG_MAIN = "Main";
 
 uint8_t level = 0;
 uint8_t pressing = 0;
 
-static const float CIRCLE_CONF_THRESHOLD = 0.8f;
-static const float CIRCLE_MOTION_THRESHOLD = 250.0f;
+static const float CIRCLE_CONF_THRESHOLD = 0.5f;
+static const float CIRCLE_MOTION_THRESHOLD = 90.0f;
 
 TickType_t cooldown_time = pdMS_TO_TICKS(RECORDING_TIME);
 TickType_t cooldown_check = pdMS_TO_TICKS(RECORDING_MS);
@@ -53,20 +62,22 @@ static void bmi160_interrupt_task(void *arg) {
     }
 }
 
-void demo_w_task() {
+static void demo_w_task(void *arg) {
+    while (1) {
         level = gpio_get_level(PIN_GPIO);
 
         if (!level && !pressing) {
             send_keystroke_press('w');
-			pressing = 1;
+            pressing = 1;
 
         }
-		else if (level && pressing) {
-			send_keystroke_release('w');
-			pressing = 0;
-		}
+        else if (level && pressing) {
+            send_keystroke_release('w');
+            pressing = 0;
+        }
 
         vTaskDelay(pdMS_TO_TICKS(10));
+    }
 }
 
 void setup_gpio_interrupt() {
@@ -85,27 +96,13 @@ void setup_gpio_interrupt() {
     gpio_install_isr_service(0);
     gpio_isr_handler_add(PIN_INT_0, bmi160_isr_handler, (void *)PIN_INT_0);
 
-
     xTaskCreate(bmi160_interrupt_task, "bmi160_task", 2048, NULL, 10, NULL);
 }
 
-void app_main(void) {
-	bt_hid_main();
 
-    i2c_main();
-
-    //setup_gpio_interrupt(); 
-
-	gpio_config_t io_conf = {
-        .pin_bit_mask = (1ULL << PIN_GPIO),   // which pin
-        .mode = GPIO_MODE_INPUT,          // input mode
-        .pull_up_en = GPIO_PULLUP_ENABLE, // enable pull-up
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE,   // no interrupt (polling)
-    };
-    gpio_config(&io_conf);
-
-	 while (1) {
+static void demo_inference_task(void *arg) {
+	(void)arg;
+    while (1) {
         level = gpio_get_level(PIN_GPIO);
 
         if (!level && !pressing) {
@@ -114,15 +111,10 @@ void app_main(void) {
         }
 		else if (level && pressing) {
             CIRC_BUF_DEF(buf, BUFFER_SIZE);
-            i2c_get_buffer(&buf);
+            i2c_get_buffer_ordered(&buf);
 
             /*
-            static int16_t ordered[BUFFER_SIZE] = {0};
-            for (int i = 0; i < BUFFER_SIZE; i++) {
-                const int src_idx = (buf.head + i) % BUFFER_SIZE;
-                ordered[i] = buf.buffer[src_idx];
-	        }
-            for (int i = 0; i < BUFFER_SIZE; i++) {printf("%d ", ordered[i]);}
+            for (int i = 0; i < BUFFER_SIZE; i++) {printf("%d ", buf.buffer[i]);}
             printf("\n");
             */
             
@@ -148,4 +140,78 @@ void app_main(void) {
 
         vTaskDelay(pdMS_TO_TICKS(10));
     }
+}
+
+static void training_data_task(void *arg) {
+	(void)arg;
+    while (1) {
+        level = gpio_get_level(PIN_GPIO);
+
+        if (!level && !pressing) {
+			pressing = 1;
+
+        }
+		else if (level && pressing) {
+            CIRC_BUF_DEF(buf, BUFFER_SIZE);
+            i2c_get_buffer_ordered(&buf);
+
+            for (int i = 0; i < BUFFER_SIZE; i++) {printf("%d ", buf.buffer[i]);}
+            printf("\n");
+
+            pressing = 0;
+		}
+
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+
+void app_main(void) {
+    
+	bt_hid_main();
+
+    i2c_main();
+
+    //setup_gpio_interrupt(); 
+
+	gpio_config_t io_conf = {
+        .pin_bit_mask = (1ULL << PIN_GPIO),   // which pin
+        .mode = GPIO_MODE_INPUT,          // input mode
+        .pull_up_en = GPIO_PULLUP_ENABLE, // enable pull-up
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,   // no interrupt (polling)
+    };
+    gpio_config(&io_conf);
+
+#ifdef INFERENCE
+    BaseType_t inference_task = xTaskCreate(
+        demo_inference_task,
+        "demo_inference_task",
+        DEMO_TASK_STACK_SIZE,
+        NULL,
+        DEMO_TASK_PRIORITY,
+        NULL
+    );
+
+	if (inference_task != pdPASS) {
+		ESP_LOGE(TAG_MAIN, "Failed to create demo_inference_task");
+	}
+#endif
+
+#ifdef TRAINING
+    BaseType_t training_task = xTaskCreate(
+        training_data_task,
+        "training_data_task",
+        TRAINING_TASK_STACK_SIZE,
+        NULL,
+        TRAINING_TASK_PRIORITY,
+        NULL
+    );
+
+	if (training_task != pdPASS) {
+		ESP_LOGE(TAG_MAIN, "Failed to create demo_inference_task");
+	}
+#endif
+
+    
+
 }

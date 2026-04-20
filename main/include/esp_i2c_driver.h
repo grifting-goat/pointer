@@ -54,11 +54,11 @@
 
 #define BMI160_INT_ANYM_TH   0xFF
 
-#define RECORDING_HZ 50
+#define RECORDING_HZ 60
 #define RECORDING_MS (1000 / RECORDING_HZ)
-#define RECORDING_TIME 1500
+#define RECORDING_TIME 1800
 #define SAMPLES_PER_CYCLE 6
-#define BUFFER_SIZE (RECORDING_HZ * (RECORDING_TIME/1000) * SAMPLES_PER_CYCLE)
+#define BUFFER_SIZE ((RECORDING_HZ * RECORDING_TIME * SAMPLES_PER_CYCLE) / 1000)
 
 #define I2C_DEMO_TASK_STACK_SIZE 4096
 #define I2C_DEMO_TASK_PRIORITY 5
@@ -68,6 +68,11 @@
  * @brief get a copy of the data buffer
  */
 void i2c_get_buffer(Circ_buf *copy);
+
+/**
+ * @brief get a copy of the data buffer in ordered fasion
+ */
+void i2c_get_buffer_ordered(Circ_buf *copy);
 
 /**
  * @brief Main I2C function for ESP32

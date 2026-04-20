@@ -45,6 +45,18 @@ void i2c_get_buffer(Circ_buf* copy) {
     }
 }
 
+void i2c_get_buffer_ordered(Circ_buf* copy) {
+    CIRC_BUF_DEF(temp, copy->maxlen);
+    if (shared.mutex != NULL) {xSemaphoreTake(shared.mutex, portMAX_DELAY);}
+    circ_buf_copy(&circular_buffer, &temp);
+    if (shared.mutex != NULL) {xSemaphoreGive(shared.mutex);}
+    for (int i = 0; i < copy->maxlen; i++) {
+        const int src_idx = (temp.head + i) % copy->maxlen;
+        copy->buffer[i] = temp.buffer[src_idx];
+    }
+    copy->head = 0;
+}
+
 /**
  * @brief Read a sequence of bytes from a BMI160 sensor registers
  */
