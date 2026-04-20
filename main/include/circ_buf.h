@@ -36,6 +36,7 @@ static inline void circ_buf_copy(const Circ_buf *src, Circ_buf *dest) {
     for (int i = 0; i < len; i++) {
         dest->buffer[i] = src->buffer[i];
     }
+    dest->head = src->head;
 
 }
 

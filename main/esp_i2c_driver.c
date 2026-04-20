@@ -36,7 +36,13 @@ typedef struct {
 i2c_shared_t shared;
 
 void i2c_get_buffer(Circ_buf* copy) {
+    if (shared.mutex != NULL) {
+        xSemaphoreTake(shared.mutex, portMAX_DELAY);
+    }
     circ_buf_copy(&circular_buffer, copy);
+    if (shared.mutex != NULL) {
+        xSemaphoreGive(shared.mutex);
+    }
 }
 
 /**
@@ -142,8 +148,14 @@ void data_buffer_task(void *pvParameters) {
     while (esp_i2c_get_full(raw_data) == ESP_OK) {
         TickType_t now = xTaskGetTickCount();
 
+        if (shared.mutex != NULL) {
+            xSemaphoreTake(shared.mutex, portMAX_DELAY);
+        }
         for (int i = 0; i < SAMPLES_PER_CYCLE; i++) {
             circ_buf_push(&circular_buffer, raw_data[i]);
+        }
+        if (shared.mutex != NULL) {
+            xSemaphoreGive(shared.mutex);
         }
 
         if ((now - print_mark) > print_time) {

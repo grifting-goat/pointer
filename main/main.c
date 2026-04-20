@@ -13,6 +13,7 @@
 #include "esp_hid_driver.h"
 #include "esp_i2c_driver.h"
 #include "circ_buf.h"
+#include "mlp_driver.h"
 
 #define PIN_GPIO GPIO_NUM_4
 
@@ -22,6 +23,9 @@
 
 uint8_t level = 0;
 uint8_t pressing = 0;
+
+static const float CIRCLE_CONF_THRESHOLD = 0.8f;
+static const float CIRCLE_MOTION_THRESHOLD = 250.0f;
 
 TickType_t cooldown_time = pdMS_TO_TICKS(RECORDING_TIME);
 TickType_t cooldown_check = pdMS_TO_TICKS(RECORDING_MS);
@@ -49,6 +53,22 @@ static void bmi160_interrupt_task(void *arg) {
     }
 }
 
+void demo_w_task() {
+        level = gpio_get_level(PIN_GPIO);
+
+        if (!level && !pressing) {
+            send_keystroke_press('w');
+			pressing = 1;
+
+        }
+		else if (level && pressing) {
+			send_keystroke_release('w');
+			pressing = 0;
+		}
+
+        vTaskDelay(pdMS_TO_TICKS(10));
+}
+
 void setup_gpio_interrupt() {
     gpio_evt_queue = xQueueCreate(10, sizeof(uint32_t));
 
@@ -74,7 +94,7 @@ void app_main(void) {
 
     i2c_main();
 
-    setup_gpio_interrupt(); 
+    //setup_gpio_interrupt(); 
 
 	gpio_config_t io_conf = {
         .pin_bit_mask = (1ULL << PIN_GPIO),   // which pin
@@ -89,13 +109,41 @@ void app_main(void) {
         level = gpio_get_level(PIN_GPIO);
 
         if (!level && !pressing) {
-            send_keystroke_press('w');
 			pressing = 1;
 
         }
 		else if (level && pressing) {
-			send_keystroke_release('w');
-			pressing = 0;
+            CIRC_BUF_DEF(buf, BUFFER_SIZE);
+            i2c_get_buffer(&buf);
+
+            /*
+            static int16_t ordered[BUFFER_SIZE] = {0};
+            for (int i = 0; i < BUFFER_SIZE; i++) {
+                const int src_idx = (buf.head + i) % BUFFER_SIZE;
+                ordered[i] = buf.buffer[src_idx];
+	        }
+            for (int i = 0; i < BUFFER_SIZE; i++) {printf("%d ", ordered[i]);}
+            printf("\n");
+            */
+            
+            mlp_result_t result;
+            mlp_predict_buffer(&buf, &result);
+            const int circle_detected =
+                (result.class_id == 1) &&
+                (result.confidence >= CIRCLE_CONF_THRESHOLD) &&
+                (result.motion_score >= CIRCLE_MOTION_THRESHOLD);
+
+            printf("prediction=%d confidence=%.3f motion=%.1f trigger=%d\n",
+                   result.class_id,
+                   result.confidence,
+                   result.motion_score,
+                   circle_detected);
+
+            if (circle_detected) {
+                send_keystroke(' ');
+            }
+            
+            pressing = 0;
 		}
 
         vTaskDelay(pdMS_TO_TICKS(10));
