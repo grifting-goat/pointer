@@ -8,8 +8,8 @@
 #include "model_int8.h"
 
 #define MLP_INPUT_SIZE 648
-#define MLP_HIDDEN0_SIZE 128
-#define MLP_HIDDEN1_SIZE 64
+#define MLP_HIDDEN0_SIZE 512
+#define MLP_HIDDEN1_SIZE 256
 #define MLP_OUTPUT_SIZE 2
 #define MLP_CHANNELS 6
 

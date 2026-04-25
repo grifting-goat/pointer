@@ -16,8 +16,8 @@
 #include "circ_buf.h"
 
 
-#define I2C_MASTER_SCL_IO           22      /*!< GPIO number used for I2C master clock */
-#define I2C_MASTER_SDA_IO           21      /*!< GPIO number used for I2C master data  */
+#define I2C_MASTER_SCL_IO           1      /*!< GPIO number used for I2C master clock */
+#define I2C_MASTER_SDA_IO           2      /*!< GPIO number used for I2C master data  */
 #define I2C_MASTER_NUM              I2C_NUM_0                   /*!< I2C port number for master dev */
 #define I2C_MASTER_FREQ_HZ          400000  /*!< I2C master clock frequency */
 #define I2C_MASTER_TX_BUF_DISABLE   0                           /*!< I2C master doesn't need buffer */

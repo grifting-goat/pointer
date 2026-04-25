@@ -20,7 +20,7 @@
 //#define INFERENCE  
 
 #define PIN_GPIO GPIO_NUM_4
-#define PIN_INT_0 GPIO_NUM_19
+#define PIN_INT_0 GPIO_NUM_18
 
 #define DEMO_TASK_STACK_SIZE 8192
 #define DEMO_TASK_PRIORITY 5

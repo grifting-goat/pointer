@@ -1,9 +1,70 @@
 #include <math.h>
 #include <stddef.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 
+#include "esp_heap_caps.h"
+#include "esp_log.h"
+#include "sdkconfig.h"
+
 #include "mlp_driver.h"
+
+static const char *TAG = "MLP";
+
+static bool workspace_ready = false;
+
+static float *s_x = NULL; //input layer
+static float *s_h0 = NULL; //hidden
+static float *s_h1 = NULL;
+static float *s_logits = NULL; //output
+
+static void free_inference_workspace(void) {
+	free(s_x);
+	free(s_h0);
+	free(s_h1);
+	free(s_logits);
+
+	s_x = NULL;
+	s_h0 = NULL;
+	s_h1 = NULL;
+	s_logits = NULL;
+	workspace_ready = false;
+}
+
+static bool try_alloc_workspace(uint32_t caps, const char *mem_name) {
+	s_x = (float *)heap_caps_malloc(sizeof(float) * MLP_INPUT_SIZE, caps);
+	s_h0 = (float *)heap_caps_malloc(sizeof(float) * MLP_HIDDEN0_SIZE, caps);
+	s_h1 = (float *)heap_caps_malloc(sizeof(float) * MLP_HIDDEN1_SIZE, caps);
+	s_logits = (float *)heap_caps_malloc(sizeof(float) * MLP_OUTPUT_SIZE, caps);
+
+	if (s_x == NULL || s_h0 == NULL || s_h1 == NULL || s_logits == NULL) {
+		free_inference_workspace();
+		ESP_LOGW(TAG, "Failed to allocate MLP workspace in %s", mem_name);
+		return false;
+	}
+
+	workspace_ready = true;
+	ESP_LOGI(TAG, "MLP inference workspace allocated in %s", mem_name);
+	return true;
+}   
+
+static bool alloc_inference_workspace(void) {
+	if (workspace_ready) {
+		return true;
+	}
+//try SPRAM first
+#if defined(CONFIG_SPIRAM) && CONFIG_SPIRAM
+	if (try_alloc_workspace(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT, "PSRAM")) {
+		return true;
+	}
+	ESP_LOGW(TAG, "Falling back to internal RAM for MLP workspace");
+#else
+	ESP_LOGI(TAG, "PSRAM disabled; using internal RAM for MLP workspace");
+#endif
+
+	return try_alloc_workspace(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT, "internal RAM");
+}
 
 static float relu(float value) {
 	return (value > 0.0f) ? value : 0.0f;
@@ -35,11 +96,6 @@ static float compute_motion_score(const int16_t *raw_window, size_t len) {
 }
 
 void mlp_predict_raw(const int16_t *raw_window, size_t raw_len, mlp_result_t *out) {
-	static float x[MLP_INPUT_SIZE];
-	static float h0[MLP_HIDDEN0_SIZE];
-	static float h1[MLP_HIDDEN1_SIZE];
-	static float logits[MLP_OUTPUT_SIZE];
-
 	if (out == NULL) {
 		return;
 	}
@@ -52,15 +108,20 @@ void mlp_predict_raw(const int16_t *raw_window, size_t raw_len, mlp_result_t *ou
 		return;
 	}
 
+	if (!alloc_inference_workspace()) {
+		ESP_LOGE(TAG, "MLP inference workspace allocation failed");
+		return;
+	}
+
 	out->motion_score = compute_motion_score(raw_window, raw_len);
 
 	for (int i = 0; i < MLP_INPUT_SIZE; i++) {
-		x[i] = 0.0f;
+		s_x[i] = 0.0f;
 	}
 
 	for (int i = 0; i < MLP_INPUT_SIZE; i++) {
 		if ((size_t)i < raw_len) {
-			x[i] = normalize_feature(i, raw_window[i]);
+			s_x[i] = normalize_feature(i, raw_window[i]);
 		}
 	}
 
@@ -69,9 +130,9 @@ void mlp_predict_raw(const int16_t *raw_window, size_t raw_len, mlp_result_t *ou
 		const float scale = mlp_w0_scale[row];
 		const int base = row * MLP_INPUT_SIZE;
 		for (int col = 0; col < MLP_INPUT_SIZE; col++) {
-			acc += ((float)mlp_w0_int8[base + col] * scale) * x[col];
+			acc += ((float)mlp_w0_int8[base + col] * scale) * s_x[col];
 		}
-		h0[row] = relu(acc);
+		s_h0[row] = relu(acc);
 	}
 
 	for (int row = 0; row < MLP_HIDDEN1_SIZE; row++) {
@@ -79,9 +140,9 @@ void mlp_predict_raw(const int16_t *raw_window, size_t raw_len, mlp_result_t *ou
 		const float scale = mlp_w1_scale[row];
 		const int base = row * MLP_HIDDEN0_SIZE;
 		for (int col = 0; col < MLP_HIDDEN0_SIZE; col++) {
-			acc += ((float)mlp_w1_int8[base + col] * scale) * h0[col];
+			acc += ((float)mlp_w1_int8[base + col] * scale) * s_h0[col];
 		}
-		h1[row] = relu(acc);
+		s_h1[row] = relu(acc);
 	}
 
 	int argmax = 0;
@@ -93,9 +154,9 @@ void mlp_predict_raw(const int16_t *raw_window, size_t raw_len, mlp_result_t *ou
 		const float scale = mlp_w2_scale[row];
 		const int base = row * MLP_HIDDEN1_SIZE;
 		for (int col = 0; col < MLP_HIDDEN1_SIZE; col++) {
-			acc += ((float)mlp_w2_int8[base + col] * scale) * h1[col];
+			acc += ((float)mlp_w2_int8[base + col] * scale) * s_h1[col];
 		}
-		logits[row] = acc;
+		s_logits[row] = acc;
 		if (acc > max_logit) {
 			max_logit = acc;
 			argmax = row;
@@ -103,12 +164,12 @@ void mlp_predict_raw(const int16_t *raw_window, size_t raw_len, mlp_result_t *ou
 	}
 
 	for (int i = 0; i < MLP_OUTPUT_SIZE; i++) {
-		sum_exp += expf(logits[i] - max_logit);
+		sum_exp += expf(s_logits[i] - max_logit);
 	}
 
 	out->class_id = argmax;
 	if (sum_exp > 0.0f) {
-		out->confidence = expf(logits[argmax] - max_logit) / sum_exp;
+		out->confidence = expf(s_logits[argmax] - max_logit) / sum_exp;
 	}
 }
 
