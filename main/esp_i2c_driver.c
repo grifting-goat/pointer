@@ -27,6 +27,8 @@ CIRC_BUF_DEF(circular_buffer, BUFFER_SIZE);
 
 static const char *TAG = "example"; 
 
+#define I2C_BUFFER_TASK_CORE 1
+
 typedef struct {
     i2c_master_bus_handle_t  bus;
     i2c_master_dev_handle_t  dev;
@@ -344,6 +346,11 @@ void i2c_main()
         ESP_LOGW(TAG, "Failed to set gyro range: %s", esp_err_to_name(err));
     }
 
+    err = bmi160_register_write_byte(shared.dev, BMI160_REG_INT_MOTION_0, BMI160_INT_ANYM_DUR);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to set interrupt motion duration: %s", esp_err_to_name(err));
+    }
+
     err = bmi160_register_write_byte(shared.dev, BMI160_REG_INT_MOTION_1, BMI160_INT_ANYM_TH);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Failed to set interrupt motion threshold: %s", esp_err_to_name(err));
@@ -369,13 +376,14 @@ void i2c_main()
 
 
 
-    BaseType_t task_created = xTaskCreate(
+    BaseType_t task_created = xTaskCreatePinnedToCore(
         data_buffer_task,
         "i2c_demo_task",
         I2C_DEMO_TASK_STACK_SIZE,
         NULL,
         I2C_DEMO_TASK_PRIORITY,
-        NULL);
+        NULL,
+        I2C_BUFFER_TASK_CORE);
 
     if (task_created != pdPASS) {
         ESP_LOGE(TAG, "Failed to create i2c_demo_task");

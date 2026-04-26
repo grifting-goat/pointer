@@ -27,8 +27,8 @@ extern const float net_5_weight_scale[2];
 extern const int net_5_bias_len;
 extern const float net_5_bias[2];
 
-extern const int input_scaler_len;
-extern const float input_scaler_mean[648];
-extern const float input_scaler_std[648];
+extern const int input_scaler_len_mlp;
+extern const float input_scaler_mean_mlp[648];
+extern const float input_scaler_std_mlp[648];
 
 #endif

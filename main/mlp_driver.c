@@ -47,9 +47,9 @@ static bool try_alloc_workspace(uint32_t caps, const char *mem_name) {
 	workspace_ready = true;
 	ESP_LOGI(TAG, "MLP inference workspace allocated in %s", mem_name);
 	return true;
-}   
+}             
 
-static bool alloc_inference_workspace(void) {
+static bool alloc_cnn_inference_workspace(void) {
 	if (workspace_ready) {
 		return true;
 	}
@@ -71,8 +71,8 @@ static float relu(float value) {
 }
 
 static float normalize_feature(int idx, int16_t raw_value) {
-	const float denom = fabsf(input_scaler_std[idx]) > 1e-9f ? input_scaler_std[idx] : 1.0f;
-	return ((float)raw_value - input_scaler_mean[idx]) / denom;
+	const float denom = fabsf(input_scaler_std_mlp[idx]) > 1e-9f ? input_scaler_std_mlp[idx] : 1.0f;
+	return ((float)raw_value - input_scaler_mean_mlp[idx]) / denom;
 }
 
 static float compute_motion_score(const int16_t *raw_window, size_t len) {
@@ -108,7 +108,7 @@ void mlp_predict_raw(const int16_t *raw_window, size_t raw_len, mlp_result_t *ou
 		return;
 	}
 
-	if (!alloc_inference_workspace()) {
+	if (!alloc_cnn_inference_workspace()) {
 		ESP_LOGE(TAG, "MLP inference workspace allocation failed");
 		return;
 	}

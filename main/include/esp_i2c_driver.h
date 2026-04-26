@@ -46,13 +46,15 @@
 #define BMI160_REG_INT_EN_0 0x50   
 #define BMI160_REG_INT_OUT_CTRL 0x53 
 #define BMI160_REG_INT_MAP_0    0x55
-#define BMI160_REG_INT_MOTION_1    0x5F
+#define BMI160_REG_INT_MOTION_0    0x5F
+#define BMI160_REG_INT_MOTION_1    0x60
 
 #define BMI160_INT_MOTION_ANY (1 << 2)
 #define BMI160_INT_OUTPUT_HIGH 0x0A
 #define BMI160_INT_EN_0 0b00000111
 
-#define BMI160_INT_ANYM_TH   0xFF
+#define BMI160_INT_ANYM_DUR 0x01
+#define BMI160_INT_ANYM_TH   0x35
 
 #define RECORDING_HZ 60
 #define RECORDING_MS (1000 / RECORDING_HZ)
@@ -67,7 +69,7 @@
 /**
  * @brief get a copy of the data buffer
  */
-void i2c_get_buffer(Circ_buf *copy);
+void i2c_get_buffer(Circ_buf *copy); 
 
 /**
  * @brief get a copy of the data buffer in ordered fasion

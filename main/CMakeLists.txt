@@ -4,6 +4,8 @@ set(srcs "main.c"
          "esp_i2c_driver.c"
          "mlp_driver.c"
          "model_int8.c"
+         "cnn_driver.c"
+         "model_cnn.c"
         )
 set(include_dirs "." "include")
 
