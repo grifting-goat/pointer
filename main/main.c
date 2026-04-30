@@ -51,7 +51,7 @@ cnn_model_t * g_cnn_model;
 uint8_t level = 0;
 uint8_t pressing = 0;
 
-TickType_t cooldown_time = pdMS_TO_TICKS(RECORDING_TIME * 2);
+TickType_t cooldown_time = pdMS_TO_TICKS(RECORDING_TIME * 1.4);
 TickType_t cooldown_check = 0;
 
 static QueueHandle_t gpio_evt_queue = NULL;

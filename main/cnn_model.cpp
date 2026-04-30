@@ -11,7 +11,7 @@
 static const char *TAG = "cnn_model";
 static const char *MODEL_PARTITION_LABEL = "model";
 static const float CIRCLE_CONF_THRESHOLD = 0.75f;
-static const float CIRCLE_MOTION_THRESHOLD = 90.0f;
+static const float CIRCLE_MOTION_THRESHOLD = 0.0f;
 
 static int tensor_shape_product(const std::vector<int> &shape)
 {
@@ -28,16 +28,12 @@ static int tensor_shape_product(const std::vector<int> &shape)
     return prod;
 }
 
-// Internal struct — hidden from C callers via the opaque typedef
 struct cnn_model_t {
     dl::Model *model;
     int input_elements;
     int output_elements;
 };
 
-
-
-// ── Init ──────────────────────────────────────────────────────────────────────
 
 extern "C" cnn_model_t *cnn_model_init()
 {
@@ -92,11 +88,7 @@ extern "C" cnn_model_t *cnn_model_init()
     return handle;
 }
 
-// ── Inference ─────────────────────────────────────────────────────────────────
-
-extern "C" esp_err_t cnn_model_infer(cnn_model_t *handle,
-                                          const float input[GESTURE_INPUT_SIZE],
-                                          cnn_result_t *out_result)
+extern "C" esp_err_t cnn_model_infer(cnn_model_t *handle, const float input[GESTURE_INPUT_SIZE], cnn_result_t *out_result)
 {
     if (!handle || !handle->model || !input || !out_result) {
         return ESP_ERR_INVALID_ARG;
@@ -112,21 +104,11 @@ extern "C" esp_err_t cnn_model_infer(cnn_model_t *handle,
     }
     dl::TensorBase *model_input = inputs.begin()->second;
 
-    // --- 2. Wrap caller's float buffer in a temporary TensorBase and assign.
-    //        assign() quantizes float → int8 using model_input->exponent internally.
-    dl::TensorBase float_input(
-        model_input->shape,
-        (void *)input,
-        0,                      // exponent = 0 → values are already real floats
-        dl::DATA_TYPE_FLOAT,
-        false                   // don't copy — we own the buffer
-    );
+    dl::TensorBase float_input(model_input->shape, (void *)input, 0, dl::DATA_TYPE_FLOAT, false);
     model_input->assign(&float_input);
 
-    // --- 3. Run forward pass
     model->run(dl::RUNTIME_MODE_AUTO);
 
-    // --- 4. Dequantize output → float TensorBase
     std::map<std::string, dl::TensorBase *> outputs = model->get_outputs();
     if (outputs.empty()) {
         ESP_LOGE(TAG, "Model outputs map is empty");
@@ -139,13 +121,11 @@ extern "C" esp_err_t cnn_model_infer(cnn_model_t *handle,
         ESP_LOGE(TAG, "Invalid output tensor shape");
         return ESP_FAIL;
     }
-
     dl::TensorBase float_output(model_output->shape, nullptr, 0, dl::DATA_TYPE_FLOAT);
     float_output.assign(model_output);   // dequantizes int8 → float
 
     float *scores = (float *)float_output.get_element_ptr();
-
-    // --- 5. Softmax + argmax
+    
     float max_logit = scores[0];
     for (int i = 1; i < output_count; i++) {
         if (scores[i] > max_logit) {
@@ -185,9 +165,7 @@ extern "C" esp_err_t cnn_model_infer(cnn_model_t *handle,
 
     ESP_LOGD(TAG, "class=%d score=%.3f", best, best_val);
     return ESP_OK;
-}
-
-// ── Deinit ────────────────────────────────────────────────────────────────────
+} 
 
 extern "C" void cnn_model_deinit(cnn_model_t *handle)
 {
