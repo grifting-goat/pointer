@@ -30,7 +30,7 @@ static Circ_buf bmi160_circ_buf = {
 
 
 //#define TRAINING
-//#define INFERENCE  
+#define INFERENCE  
 
 #define PIN_GPIO GPIO_NUM_4
 #define PIN_INT_0 GPIO_NUM_18
@@ -78,6 +78,9 @@ static void bmi160_interrupt_task(void *arg) {
                            bmi160_circ_buf.buffer,
                            usable_len * sizeof(bmi160_input_buffer[0]));
 
+                for (int i = 0; i < (int)usable_len; i++) { printf("%f ", bmi160_input_buffer[i]); }
+                printf("\n");
+
                 cnn_result_t result = {0};
                 cnn_model_infer(g_cnn_model, bmi160_input_buffer, &result);
 
@@ -90,7 +93,7 @@ static void bmi160_interrupt_task(void *arg) {
 
                 if (result.triggered) {
                     send_keystroke(' ');
-                }
+                }    
             }
         }
         // Always yield to avoid watchdog
@@ -154,11 +157,28 @@ static void demo_inference_task(void *arg) {
 
         }
 		else if (level && pressing) {
-            CIRC_BUF_DEF(buf, BUFFER_SIZE);
-            i2c_get_buffer_ordered(&buf);
-        
+            i2c_get_buffer_ordered(&bmi160_circ_buf);
+            memset(bmi160_input_buffer, 0, sizeof(bmi160_input_buffer));
+            const size_t usable_len = (bmi160_circ_buf.maxlen < GESTURE_INPUT_SIZE)
+                                                ? bmi160_circ_buf.maxlen : GESTURE_INPUT_SIZE;
+            memcpy(bmi160_input_buffer,
+                        bmi160_circ_buf.buffer,
+                        usable_len * sizeof(bmi160_input_buffer[0]));
 
-            if (0) {
+            for (int i = 0; i < (int)usable_len; i++) { printf("%f ", bmi160_input_buffer[i]); }
+            printf("\n");
+
+            cnn_result_t result = {0};
+            cnn_model_infer(g_cnn_model, bmi160_input_buffer, &result);
+
+            printf("CNN:prediction=%d confidence=%.3f motion=%.1f triggered=%d\n",
+                result.class_id,
+                result.confidence,
+                result.motion_score,
+                result.triggered
+            );       
+
+            if (result.triggered) {
                 send_keystroke(' ');
             }
             
@@ -198,7 +218,7 @@ void app_main(void) {
 
     i2c_main();
 
-    setup_gpio_interrupt(); 
+    //setup_gpio_interrupt(); 
 
     g_cnn_model = cnn_model_init();
     if (!g_cnn_model) {

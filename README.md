@@ -8,6 +8,7 @@ The goal is to develop a comically large pointer hand that can detect gestures a
 
 - Bluetooth Hardware Interface Device
 - Small Neural Net recognizing simple guestures (1 Dimensional CNN)
+- Physical pointing structure
 
 # Components
 
@@ -21,11 +22,13 @@ The goal is to develop a comically large pointer hand that can detect gestures a
 
 - ESP-IDF
 - Python -> PyTorch
+- esp-dl
 
 
 # Constraints
 - 512 SRAM
     - Bluetooth and I2C stack
+    - inference scratch buffer
 - 8 MB PSRAM
     - Inference stack
 - 16 MB Flash
