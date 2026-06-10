@@ -24,7 +24,6 @@ The goal is to develop a comically large pointer hand that can detect gestures a
 - Python -> PyTorch
 - esp-dl
 
-
 # Constraints
 - 512 SRAM
     - Bluetooth and I2C stack
