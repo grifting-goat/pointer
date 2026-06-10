@@ -27,6 +27,8 @@ CIRC_BUF_DEF(circular_buffer, BUFFER_SIZE);
 
 static const char *TAG = "example"; 
 
+#define I2C_BUFFER_TASK_CORE 1
+
 typedef struct {
     i2c_master_bus_handle_t  bus;
     i2c_master_dev_handle_t  dev;
@@ -117,12 +119,13 @@ esp_err_t esp_i2c_get_accel(int16_t* acc_buffer) {
 
 }
 
-esp_err_t esp_i2c_get_full(int16_t* acc_buffer) {
+esp_err_t esp_i2c_get_full(float* acc_buffer) {
     uint8_t buffer[SAMPLES_PER_CYCLE << 1] = {0};
     esp_err_t err = bmi160_register_read(shared.dev, BMI160_GYRO_DATA_ADDR, buffer, SAMPLES_PER_CYCLE << 1);
     if (err != ESP_OK) {return err;}
     for (int i = 0; i < SAMPLES_PER_CYCLE; i++) {
-        acc_buffer[i] = (int16_t)((buffer[(i * 2) + 1] << 8) | buffer[i * 2]);
+        const int16_t sample = (int16_t)((buffer[(i * 2) + 1] << 8) | buffer[i * 2]);
+        acc_buffer[i] = (float)sample;
     }
 
     return ESP_OK;
@@ -150,7 +153,7 @@ void recording_task(void *pvParameters) {
 void data_buffer_task(void *pvParameters) {
 
     (void)pvParameters;
-    int16_t raw_data[SAMPLES_PER_CYCLE] = {0};
+    float raw_data[SAMPLES_PER_CYCLE] = {0};
 
     TickType_t sample_time = pdMS_TO_TICKS(RECORDING_MS);
     TickType_t print_time = pdMS_TO_TICKS(1000);
@@ -344,6 +347,11 @@ void i2c_main()
         ESP_LOGW(TAG, "Failed to set gyro range: %s", esp_err_to_name(err));
     }
 
+    err = bmi160_register_write_byte(shared.dev, BMI160_REG_INT_MOTION_0, BMI160_INT_ANYM_DUR);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to set interrupt motion duration: %s", esp_err_to_name(err));
+    }
+
     err = bmi160_register_write_byte(shared.dev, BMI160_REG_INT_MOTION_1, BMI160_INT_ANYM_TH);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Failed to set interrupt motion threshold: %s", esp_err_to_name(err));
@@ -369,13 +377,14 @@ void i2c_main()
 
 
 
-    BaseType_t task_created = xTaskCreate(
+    BaseType_t task_created = xTaskCreatePinnedToCore(
         data_buffer_task,
         "i2c_demo_task",
         I2C_DEMO_TASK_STACK_SIZE,
         NULL,
         I2C_DEMO_TASK_PRIORITY,
-        NULL);
+        NULL,
+        I2C_BUFFER_TASK_CORE);
 
     if (task_created != pdPASS) {
         ESP_LOGE(TAG, "Failed to create i2c_demo_task");

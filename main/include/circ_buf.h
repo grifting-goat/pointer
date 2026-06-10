@@ -5,7 +5,7 @@
 
 
 #define CIRC_BUF_DEF(x,y)                \
-    int16_t x##_data_space[y];            \
+    float x##_data_space[y];            \
     Circ_buf x = {                     \
         .buffer = x##_data_space,         \
         .head = 0,                        \
@@ -14,13 +14,13 @@
 
 
 typedef struct {
-    int16_t* const buffer;
+    float* const buffer;
     int head;
     const int maxlen;
 } Circ_buf;
 
 
-static inline void circ_buf_push(Circ_buf *buf, int16_t data) {
+static inline void circ_buf_push(Circ_buf *buf, float data) {
     int next = buf->head + 1;
 
     if (next >= buf->maxlen) {

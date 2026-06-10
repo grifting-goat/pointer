@@ -16,6 +16,8 @@
 
 static const char *TAG_BT = "POINTER_BT";
 
+#define BLE_HID_DEMO_TASK_CORE 0
+
 
 #include "host/ble_hs.h"
 #include "nimble/nimble_port.h"
@@ -563,8 +565,13 @@ void ble_hid_task_start_up(void) {
         return;
     }
 
-    xTaskCreate(ble_hid_demo_task, "ble_hid_demo_task_kbd", 3 * 1024, NULL, configMAX_PRIORITIES - 3,
-            &s_ble_hid_param.task_hdl);
+        xTaskCreatePinnedToCore(ble_hid_demo_task,
+            "ble_hid_demo_task_kbd",
+            3 * 1024,
+            NULL,
+            configMAX_PRIORITIES - 3,
+            &s_ble_hid_param.task_hdl,
+            BLE_HID_DEMO_TASK_CORE);
 }
 
 void ble_hid_task_shut_down(void) {
